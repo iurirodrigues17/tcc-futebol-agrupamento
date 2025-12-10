@@ -71,7 +71,6 @@ for k in [3, 5, 7, 9]:
     results.append({"alg": "Birch", "k": k, **m})
 
 # 7) DBSCAN (sem k)
-# Esses parâmetros são um ponto de partida; você pode variar depois
 dbs = DBSCAN(eps=1.2, min_samples=10)
 labels_dbs = dbs.fit_predict(X_scaled)
 m = evaluate(labels_dbs, X_scaled)
