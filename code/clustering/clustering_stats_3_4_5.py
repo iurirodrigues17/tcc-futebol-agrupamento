@@ -16,6 +16,7 @@ DB_PATH = "../data/database.sqlite"
 SOURCE_TABLE = "team_windows_stats_3_4_5"
 TARGET_TABLE = "team_windows_stats_3_4_5_kmeans3"
 
+
 def main():
     print("DB_PATH:", DB_PATH)
     print("Tabela de origem:", SOURCE_TABLE)
@@ -26,7 +27,7 @@ def main():
     print("Tabela carregada:", df.shape)
     print("Colunas de exemplo:", df.columns[:20].tolist())
 
-    # 1) Definir colunas de CONTEXTO
+    # 1) Colunas de CONTEXTO (não entram no X)
     context_cols = [
         "team_id",
         "current_match_id",
@@ -38,30 +39,27 @@ def main():
     ]
     context_cols = [c for c in context_cols if c in df.columns]
 
-    # 2) Definir colunas REDUNDANTES (NÃO entram como features de clustering)
-    redundant_cols = [
-        "goals_for_last5",
-        "shots_for_last5",
-        "shots_on_for_last5",
-        "yellows_for_last5",
-        "reds_for_last5",
-        "avg_possession_for_last5",
-    ]
-    redundant_cols = [c for c in redundant_cols if c in df.columns]
-    
-    # 3) Features = tudo que não é contexto
-    feature_cols = [
-        c for c in df.columns
-        if c not in context_cols and c not in redundant_cols
-    ]
-
-    print(f"Nº de features (sem redundâncias): {len(feature_cols)}")
-
-    # Verificação básica
     if "result_current" not in df.columns:
         raise ValueError("Coluna 'result_current' não encontrada na tabela.")
 
-    # 4) Montar X e padronizar (z-score)
+    # 2) FEATURES
+    feature_cols = [
+        c for c in df.columns
+        if (c.startswith("mean_") or c.startswith("std_")) and (c not in context_cols)
+    ]
+
+    if len(feature_cols) == 0:
+        raise ValueError(
+            "Nenhuma feature encontrada com prefixo mean_ ou std_. "
+            "Confira se a tabela possui colunas como mean_goals_for_last5, std_shots_for_last3, etc."
+        )
+
+    print(f"Nº de features (apenas mean_/std_): {len(feature_cols)}")
+    print("Exemplos de features:", feature_cols[:15])
+
+    # 3) Preparar X (tratando NaN por segurança) e padronizar (z-score)
+    df[feature_cols] = df[feature_cols].fillna(0.0)
+
     X = df[feature_cols].values
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
@@ -71,7 +69,7 @@ def main():
     # Rótulo real: -1, 0, 1 (derrota, empate, vitória)
     y_true = df["result_current"].values
 
-    # 5) Métricas com o RÓTULO REAL
+    # 4) Métricas com o RÓTULO REAL
     print("\n=== Separação usando o rótulo REAL (result_current) ===")
     print("Distribuição de rótulos (result_current):")
     print(pd.Series(y_true).value_counts())
@@ -88,7 +86,7 @@ def main():
     print(f"Calinski-Harabasz (rótulo real): {ch_real:.4f}")
     print(f"Davies-Bouldin (rótulo real): {db_real:.4f}")
 
-    # 6) KMeans k=3 (sem usar rótulo no treino)
+    # 5) KMeans k=3 (sem usar rótulo no treino)
     print("\n=== KMeans com k=3 (sem usar rótulo no treino) ===")
     k = 3
     kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
@@ -110,12 +108,11 @@ def main():
     print(f"Davies-Bouldin (KMeans): {db_km:.4f}")
     print(f"Adjusted Rand Index (vs rótulo real): {ari:.4f}")
     print(f"NMI (vs rótulo real): {nmi:.4f}")
-
-    # Distribuição de clusters
     print("\nDistribuição de clusters (KMeans k=3):")
+    
     print(pd.Series(labels_km, name="cluster_kmeans_3_stats").value_counts())
 
-    # Crosstab cluster x resultado da partida
+    # 6) Crosstab cluster x resultado da partida
     df["cluster_kmeans_3_stats"] = labels_km
 
     print("\nCrosstab clusters x resultado atual (contagem absoluta):")

@@ -36,7 +36,7 @@ def main():
     leagues = sorted(df_all["league_id"].unique())
     print("Ligas disponíveis:", leagues)
 
-    # Para acumular:
+    # Acumuladores
     dfs_out = []
     metrics_rows = []
 
@@ -51,33 +51,32 @@ def main():
         "result_current",
     ]
 
-    # Colunas redundantes a serem ignoradas
-    base_redundant_cols = [
-        "goals_for_last5",
-        "shots_for_last5",
-        "shots_on_for_last5",
-        "yellows_for_last5",
-        "reds_for_last5",
-        "avg_possession_for_last5",
-    ]
-
     for lg in leagues:
         print("\n" + "#" * 80)
         print(f"Liga {lg}")
+
         df = df_all[df_all["league_id"] == lg].copy()
         n_rows = len(df)
         print("Nº de janelas nesta liga:", n_rows)
 
-        # Contexto e redundantes, filtrando só o que existe
         context_cols = [c for c in base_context_cols if c in df.columns]
-        redundant_cols = [c for c in base_redundant_cols if c in df.columns]
 
+        # FEATURES: APENAS médias e desvios-padrão
         feature_cols = [
             c for c in df.columns
-            if c not in context_cols and c not in redundant_cols
+            if (c.startswith("mean_") or c.startswith("std_")) and (c not in context_cols)
         ]
 
-        print(f"Nº de features nesta liga: {len(feature_cols)}")
+        if len(feature_cols) == 0:
+            raise ValueError(
+                f"Nenhuma feature mean_/std_ encontrada na liga {lg}. "
+                "Confira se a tabela possui colunas mean_* e std_*."
+            )
+
+        print(f"Nº de features nesta liga (apenas mean_/std_): {len(feature_cols)}")
+
+        # Segurança contra NaN
+        df[feature_cols] = df[feature_cols].fillna(0.0)
 
         X = df[feature_cols].values
         scaler = StandardScaler()
@@ -141,7 +140,7 @@ def main():
 
         metrics_rows.append({
             "league_id": int(lg),
-            "n_janelas": n_rows,
+            "n_janelas": int(n_rows),
             "sil_real": float(sil_real),
             "ch_real": float(ch_real),
             "db_real": float(db_real),
@@ -152,14 +151,14 @@ def main():
             "nmi": float(nmi),
         })
 
-    # Junta tudo num único DF com clusters
+    # Salvar tabela com clusters
     df_final = pd.concat(dfs_out, ignore_index=True)
     df_final.to_sql(TARGET_TABLE, conn, if_exists="replace", index=False)
     print(f"\nTabela '{TARGET_TABLE}' salva com todas as janelas + cluster por liga.")
 
-    # Salva resumo de métricas
+    # Salvar resumo de métricas
     df_metrics = pd.DataFrame(metrics_rows)
-    print("\nResumo das métricas por liga (vetor estatístico 3/4/5, sem redundâncias):")
+    print("\nResumo das métricas por liga (apenas mean_/std_):")
     print(df_metrics)
 
     df_metrics.to_sql(METRICS_TABLE, conn, if_exists="replace", index=False)
