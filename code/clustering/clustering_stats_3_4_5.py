@@ -16,6 +16,10 @@ DB_PATH = "../data/database.sqlite"
 SOURCE_TABLE = "team_windows_stats_3_4_5"
 TARGET_TABLE = "team_windows_stats_3_4_5_kmeans3"
 
+USE_FOULS = False      # mean_fouls_for_*, std_fouls_for_*
+USE_YELLOWS = True    # mean_yellows_for_*, std_yellows_for_*
+USE_REDS = True       # mean_reds_for_*, std_reds_for_*
+
 
 def main():
     print("DB_PATH:", DB_PATH)
@@ -42,22 +46,53 @@ def main():
     if "result_current" not in df.columns:
         raise ValueError("Coluna 'result_current' não encontrada na tabela.")
 
-    # 2) FEATURES
-    feature_cols = [
+    # 2) FEATURES: todas mean_/std_ e depois filtramos faltas/cartões via flags
+    feature_cols_all = [
         c for c in df.columns
         if (c.startswith("mean_") or c.startswith("std_")) and (c not in context_cols)
     ]
 
-    if len(feature_cols) == 0:
+    if len(feature_cols_all) == 0:
         raise ValueError(
             "Nenhuma feature encontrada com prefixo mean_ ou std_. "
             "Confira se a tabela possui colunas como mean_goals_for_last5, std_shots_for_last3, etc."
         )
 
-    print(f"Nº de features (apenas mean_/std_): {len(feature_cols)}")
-    print("Exemplos de features:", feature_cols[:15])
+    # filtro pelas flags
+    feature_cols = []
+    dropped_fouls = []
+    dropped_yellows = []
+    dropped_reds = []
 
-    # 3) Preparar X (tratando NaN por segurança) e padronizar (z-score)
+    for c in feature_cols_all:
+        c_low = c.lower()
+
+        # faltas
+        if ("fouls_for" in c_low) and (not USE_FOULS):
+            dropped_fouls.append(c)
+            continue
+
+        # cartões amarelos
+        if ("yellows_for" in c_low) and (not USE_YELLOWS):
+            dropped_yellows.append(c)
+            continue
+
+        # cartões vermelhos
+        if ("reds_for" in c_low) and (not USE_REDS):
+            dropped_reds.append(c)
+            continue
+
+        feature_cols.append(c)
+
+    print("\nResumo da seleção de features:")
+    print(f"  Total original (mean_/std_): {len(feature_cols_all)}")
+    print(f"  Usando faltas?      {USE_FOULS}  -> removidas: {len(dropped_fouls)}")
+    print(f"  Usando amarelos?    {USE_YELLOWS} -> removidas: {len(dropped_yellows)}")
+    print(f"  Usando vermelhos?   {USE_REDS}    -> removidas: {len(dropped_reds)}")
+    print(f"  Nº de features selecionadas: {len(feature_cols)}")
+    print("Exemplos de features selecionadas:", feature_cols[:15])
+
+    # 3) Preparar X (tratando NaN) e padronizar (z-score)
     df[feature_cols] = df[feature_cols].fillna(0.0)
 
     X = df[feature_cols].values
@@ -109,7 +144,6 @@ def main():
     print(f"Adjusted Rand Index (vs rótulo real): {ari:.4f}")
     print(f"NMI (vs rótulo real): {nmi:.4f}")
     print("\nDistribuição de clusters (KMeans k=3):")
-    
     print(pd.Series(labels_km, name="cluster_kmeans_3_stats").value_counts())
 
     # 6) Crosstab cluster x resultado da partida

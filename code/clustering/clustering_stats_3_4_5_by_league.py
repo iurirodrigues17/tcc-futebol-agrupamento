@@ -17,6 +17,10 @@ SOURCE_TABLE = "team_windows_stats_3_4_5"
 TARGET_TABLE = "team_windows_stats_3_4_5_kmeans3_by_league"
 METRICS_TABLE = "clustering_stats_3_4_5_by_league_metrics"
 
+USE_FOULS = False      # mean_fouls_for_*, std_fouls_for_*
+USE_YELLOWS = True    # mean_yellows_for_*, std_yellows_for_*
+USE_REDS = True       # mean_reds_for_*, std_reds_for_*
+
 
 def main():
     print("DB_PATH:", DB_PATH)
@@ -61,19 +65,45 @@ def main():
 
         context_cols = [c for c in base_context_cols if c in df.columns]
 
-        # FEATURES: APENAS médias e desvios-padrão
-        feature_cols = [
+        # FEATURES: APENAS médias e desvios-padrão, filtrando faltas/cartões via flags
+        feature_cols_all = [
             c for c in df.columns
             if (c.startswith("mean_") or c.startswith("std_")) and (c not in context_cols)
         ]
 
-        if len(feature_cols) == 0:
+        if len(feature_cols_all) == 0:
             raise ValueError(
                 f"Nenhuma feature mean_/std_ encontrada na liga {lg}. "
                 "Confira se a tabela possui colunas mean_* e std_*."
             )
 
-        print(f"Nº de features nesta liga (apenas mean_/std_): {len(feature_cols)}")
+        feature_cols = []
+        dropped_fouls = []
+        dropped_yellows = []
+        dropped_reds = []
+
+        for c in feature_cols_all:
+            c_low = c.lower()
+
+            if ("fouls_for" in c_low) and (not USE_FOULS):
+                dropped_fouls.append(c)
+                continue
+
+            if ("yellows_for" in c_low) and (not USE_YELLOWS):
+                dropped_yellows.append(c)
+                continue
+
+            if ("reds_for" in c_low) and (not USE_REDS):
+                dropped_reds.append(c)
+                continue
+
+            feature_cols.append(c)
+
+        print(f"Nº de features nesta liga (apenas mean_/std_ selecionadas): {len(feature_cols)}")
+        print("Resumo da filtragem nesta liga:")
+        print(f"  Usando faltas?    {USE_FOULS}  -> removidas: {len(dropped_fouls)}")
+        print(f"  Usando amarelos?  {USE_YELLOWS} -> removidas: {len(dropped_yellows)}")
+        print(f"  Usando vermelhos? {USE_REDS}    -> removidas: {len(dropped_reds)}")
 
         # Segurança contra NaN
         df[feature_cols] = df[feature_cols].fillna(0.0)
@@ -158,7 +188,7 @@ def main():
 
     # Salvar resumo de métricas
     df_metrics = pd.DataFrame(metrics_rows)
-    print("\nResumo das métricas por liga (apenas mean_/std_):")
+    print("\nResumo das métricas por liga (apenas mean_/std_ selecionadas):")
     print(df_metrics)
 
     df_metrics.to_sql(METRICS_TABLE, conn, if_exists="replace", index=False)
