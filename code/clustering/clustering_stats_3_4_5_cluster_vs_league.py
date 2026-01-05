@@ -17,6 +17,20 @@ def main():
 
     print("Tabela carregada:", df.shape)
     print("Colunas disponíveis:", df.columns[:20].tolist())
+    
+    #Filtro de ligas
+    EXCLUDED_LEAGUES = [24558]
+
+    before_filter = len(df)
+    df = df[~df["league_id"].isin(EXCLUDED_LEAGUES)].copy()
+    after_filter = len(df)
+
+    print("\n=== Filtro de ligas ===")
+    print(f"Ligas excluídas: {EXCLUDED_LEAGUES}")
+    print(f"Registros removidos pelo filtro de ligas: {before_filter - after_filter}")
+    print(f"Shape antes do filtro: ({before_filter}, {df.shape[1]})")
+    print(f"Shape após o filtro: ({after_filter}, {df.shape[1]})\n")
+
 
     if "league_id" not in df.columns or "cluster_kmeans_3_stats" not in df.columns:
         raise ValueError("A tabela de origem precisa ter 'league_id' e 'cluster_kmeans_3_stats'.")

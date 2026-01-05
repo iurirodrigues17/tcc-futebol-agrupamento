@@ -17,9 +17,11 @@ SOURCE_TABLE = "team_windows_stats_3_4_5"
 TARGET_TABLE = "team_windows_stats_3_4_5_kmeans3_by_league"
 METRICS_TABLE = "clustering_stats_3_4_5_by_league_metrics"
 
-USE_FOULS = False      # mean_fouls_for_*, std_fouls_for_*
-USE_YELLOWS = True    # mean_yellows_for_*, std_yellows_for_*
-USE_REDS = True       # mean_reds_for_*, std_reds_for_*
+# Flags para ligar/desligar grupos de atributos disciplinares
+# (ajuste aqui para cada experimento que deseje rodar)
+USE_FOULS = True      # True = mantém mean/std de faltas, False = remove
+USE_YELLOWS = True    # True = mantém mean/std de amarelos, False = remove
+USE_REDS = True       # True = mantém mean/std de vermelhos, False = remove
 
 
 def main():
@@ -32,11 +34,25 @@ def main():
     print("Tabela carregada:", df_all.shape)
     print("Colunas de exemplo:", df_all.columns[:20].tolist())
 
+    # Filtro de ligas
+    EXCLUDED_LEAGUES = [24558]
+
     if "league_id" not in df_all.columns:
         raise ValueError("Coluna 'league_id' não encontrada na tabela de origem.")
     if "result_current" not in df_all.columns:
         raise ValueError("Coluna 'result_current' não encontrada na tabela de origem.")
 
+    before_filter = len(df_all)
+    df_all = df_all[~df_all["league_id"].isin(EXCLUDED_LEAGUES)].copy()
+    after_filter = len(df_all)
+
+    print("\n=== Filtro de ligas ===")
+    print(f"Ligas excluídas: {EXCLUDED_LEAGUES}")
+    print(f"Registros removidos pelo filtro de ligas: {before_filter - after_filter}")
+    print(f"Shape antes do filtro: ({before_filter}, {df_all.shape[1]})")
+    print(f"Shape após o filtro: ({after_filter}, {df_all.shape[1]})\n")
+
+    # Ligas disponíveis após o filtro
     leagues = sorted(df_all["league_id"].unique())
     print("Ligas disponíveis:", leagues)
 
@@ -59,15 +75,15 @@ def main():
         print("\n" + "#" * 80)
         print(f"Liga {lg}")
 
-        df = df_all[df_all["league_id"] == lg].copy()
-        n_rows = len(df)
+        df_lg = df_all[df_all["league_id"] == lg].copy()
+        n_rows = len(df_lg)
         print("Nº de janelas nesta liga:", n_rows)
 
-        context_cols = [c for c in base_context_cols if c in df.columns]
+        context_cols = [c for c in base_context_cols if c in df_lg.columns]
 
         # FEATURES: APENAS médias e desvios-padrão, filtrando faltas/cartões via flags
         feature_cols_all = [
-            c for c in df.columns
+            c for c in df_lg.columns
             if (c.startswith("mean_") or c.startswith("std_")) and (c not in context_cols)
         ]
 
@@ -106,13 +122,13 @@ def main():
         print(f"  Usando vermelhos? {USE_REDS}    -> removidas: {len(dropped_reds)}")
 
         # Segurança contra NaN
-        df[feature_cols] = df[feature_cols].fillna(0.0)
+        df_lg[feature_cols] = df_lg[feature_cols].fillna(0.0)
 
-        X = df[feature_cols].values
+        X = df_lg[feature_cols].values
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
 
-        y_true = df["result_current"].values
+        y_true = df_lg["result_current"].values
 
         # Métricas com rótulo real
         print("\n=== Rótulo REAL (result_current) nesta liga ===")
@@ -157,16 +173,16 @@ def main():
         print("\nDistribuição de clusters (KMeans k=3):")
         print(pd.Series(labels_km, name="cluster_kmeans_3_stats").value_counts())
 
-        df["cluster_kmeans_3_stats"] = labels_km
+        df_lg["cluster_kmeans_3_stats"] = labels_km
 
         print("\nCrosstab clusters x resultado atual (contagem absoluta):")
-        print(pd.crosstab(df["cluster_kmeans_3_stats"], df["result_current"]))
+        print(pd.crosstab(df_lg["cluster_kmeans_3_stats"], df_lg["result_current"]))
 
         print("\nCrosstab clusters x resultado atual (proporção por cluster):")
-        ct = pd.crosstab(df["cluster_kmeans_3_stats"], df["result_current"], normalize="index")
+        ct = pd.crosstab(df_lg["cluster_kmeans_3_stats"], df_lg["result_current"], normalize="index")
         print(ct)
 
-        dfs_out.append(df)
+        dfs_out.append(df_lg)
 
         metrics_rows.append({
             "league_id": int(lg),
