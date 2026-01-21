@@ -16,12 +16,23 @@ DB_PATH = "../data/database.sqlite"
 TABLE = "team_windows_hist5"   # tabela das janelas: 5 partidas anteriores + resultado atual
 K = 3                          # 3 grupos, pois temos vitória / empate / derrota
 
+EXCLUDED_LEAGUES = [24558]
+
 # 1. Carrega os dados
 conn = sqlite3.connect(DB_PATH)
 df = pd.read_sql_query(f"SELECT * FROM {TABLE};", conn)
 conn.close()
 
 print("Tabela carregada:", df.shape)
+
+# === Filtro de ligas ===
+print("\n=== Filtro de ligas ===")
+print(f"Ligas excluídas: {EXCLUDED_LEAGUES}")
+before_filter = len(df)
+df = df[~df["league_id"].isin(EXCLUDED_LEAGUES)].copy()
+after_filter = len(df)
+print(f"Registros removidos pelo filtro de ligas: {before_filter - after_filter}")
+print(f"Shape após o filtro: {df.shape}")
 
 # Colunas de contexto (não entram em X)
 context_cols = [

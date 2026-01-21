@@ -10,12 +10,23 @@ DB_PATH = "../data/database.sqlite"
 TABLE = "team_windows_5_strict"  # ou padded, se quiser comparar
 WINDOW_SIZE = 5
 
+EXCLUDED_LEAGUES = [24558]
+
 # 1) Load
 conn = sqlite3.connect(DB_PATH)
 df = pd.read_sql_query(f"SELECT * FROM {TABLE};", conn)
 conn.close()
 
 print("Tabela carregada:", df.shape)
+
+# === Filtro de ligas ===
+print("\n=== Filtro de ligas ===")
+print(f"Ligas excluídas: {EXCLUDED_LEAGUES}")
+before_filter = len(df)
+df = df[~df["league_id"].isin(EXCLUDED_LEAGUES)].copy()
+after_filter = len(df)
+print(f"Registros removidos pelo filtro de ligas: {before_filter - after_filter}")
+print(f"Shape após o filtro: {df.shape}")
 
 # 2) Identificar colunas de features
 context_cols = ["team_id", "ref_match_id", "ref_date", "league_id", "season", "opponent_id_ref"]

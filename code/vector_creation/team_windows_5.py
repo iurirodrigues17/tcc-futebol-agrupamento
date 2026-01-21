@@ -160,7 +160,7 @@ print(f"Tabela '{table_pad}' salva no banco.")
 
 conn.close()
 
-print("\n✅ Concluído.")
+print("\n Concluído.")
 print("Tabelas geradas:")
 print("-", table_strict)
 print("-", table_pad)

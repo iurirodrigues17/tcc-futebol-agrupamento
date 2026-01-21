@@ -23,11 +23,13 @@ LEAGUE_NAMES = {
     10257: "Italy Serie A",
     13274: "Netherlands Eredivisie",
     21518: "Spain LIGA BBVA",
-    24558: "Switzerland Super League",
+    # 24558: "Switzerland Super League",
 }
 
 print("DB_PATH:", DB_PATH)
 print("Tabela de origem:", TABLE)
+
+EXCLUDED_LEAGUES = [24558]
 
 # 1. Carregar dados completos
 conn = sqlite3.connect(DB_PATH)
@@ -35,6 +37,18 @@ df = pd.read_sql_query(f"SELECT * FROM {TABLE};", conn)
 conn.close()
 
 print("Tabela carregada:", df.shape)
+
+# === Filtro de ligas ===
+print("\n=== Filtro de ligas ===")
+print(f"Ligas excluídas: {EXCLUDED_LEAGUES}")
+before_filter = len(df)
+df = df[~df["league_id"].isin(EXCLUDED_LEAGUES)].copy()
+after_filter = len(df)
+print(f"Registros removidos pelo filtro de ligas: {before_filter - after_filter}")
+print(f"Shape após o filtro: {df.shape}")
+
+leagues = sorted(df["league_id"].unique())
+print("\nLigas disponíveis (após filtro):", leagues)
 
 context_cols = [
     "team_id",
